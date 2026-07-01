@@ -1,15 +1,23 @@
 import SwiftUI
 
 struct RootView: View {
-    @EnvironmentObject var account: AccountManager
     @EnvironmentObject var store: Store
     @EnvironmentObject var appModel: AppModel
-    @AppStorage("tonecheck.theme") private var themeRaw = AppTheme.system.rawValue
 
-    private var theme: AppTheme { AppTheme(rawValue: themeRaw) ?? .system }
+    @State private var selection: Tab = .check
+
+    enum Tab: Hashable { case check, history }
 
     var body: some View {
-        HomeView()
-            .preferredColorScheme(theme.colorScheme)
+        TabView(selection: $selection) {
+            CheckView()
+                .tabItem { Label("Check", systemImage: "text.magnifyingglass") }
+                .tag(Tab.check)
+
+            HistoryView()
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+                .tag(Tab.history)
+        }
+        .tint(Color.tcAccent)
     }
 }

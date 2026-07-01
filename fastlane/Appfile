@@ -1,5 +1,5 @@
 # Fill apple_id with the account-holder Apple ID for team W7Q885Q59C before running lanes.
-app_identifier("com.tonecheckapp.tonecheck")
-apple_id(ENV["TONECHECK_APPLE_ID"] || "CHANGE_ME@example.com")
+app_identifier("com.shimondeitel.comb")
+apple_id(ENV["COMB_APPLE_ID"] || "CHANGE_ME@example.com")
 team_id("W7Q885Q59C")
 itc_team_id("W7Q885Q59C")

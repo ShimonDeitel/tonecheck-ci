@@ -1,89 +1,28 @@
 import XCTest
 
-/// End-to-end UI tests that actually tap through every screen and flow.
 final class ToneCheckUITests: XCTestCase {
 
     override func setUp() { continueAfterFailure = false }
 
-    private func launch(pro: Bool = false, fast: Bool = true) -> XCUIApplication {
+    private func launch(pro: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchEnvironment["TONECHECK_SKIP_AUTH"] = "1"   // bypass the Sign-in gate for testing
-        app.launchEnvironment["TONECHECK_NO_SK"] = "1"       // no StoreKit sign-in prompt
-        if fast { app.launchEnvironment["TONECHECK_FAST"] = "1" }  // ~1.5s sessions
-        app.launchEnvironment["TONECHECK_SEED"] = "3"        // a little history
+        app.launchEnvironment["TONECHECK_NO_SK"] = "1"
         if pro { app.launchEnvironment["TONECHECK_FORCE_PRO"] = "1" }
         app.launch()
         return app
     }
 
-    /// Home renders, a session runs to completion, and you return home.
-    func testBreatheSessionToCompletion() {
+    func testTabsExistAndSwitch() {
         let app = launch()
-        XCTAssertTrue(app.buttons["breathe"].waitForExistence(timeout: 8))
-        app.buttons["len-60"].tap()
-        app.buttons["breathe"].tap()
-        // Session screen is up (End button is stable for the whole session).
-        XCTAssertTrue(app.buttons["endSession"].waitForExistence(timeout: 5))
-        // Fast mode finishes quickly → the Complete screen.
-        XCTAssertTrue(app.staticTexts["Nice."].waitForExistence(timeout: 12))
-        app.buttons["complete-done"].tap()
-        XCTAssertTrue(app.buttons["breathe"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Check"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["History"].tap()
+        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 3))
     }
 
-    /// Ending a session early returns home without crashing. (Slow session so End is tappable.)
-    func testEndSessionEarly() {
-        let app = launch(fast: false)
-        XCTAssertTrue(app.buttons["breathe"].waitForExistence(timeout: 8))
-        app.buttons["breathe"].tap()
-        XCTAssertTrue(app.buttons["endSession"].waitForExistence(timeout: 5))
-        app.buttons["endSession"].tap()
-        XCTAssertTrue(app.buttons["breathe"].waitForExistence(timeout: 5))
-    }
-
-    /// Tapping a locked Pro pattern opens the paywall.
-    func testLockedPatternOpensPaywall() {
+    func testCheckTabHasTextEditor() {
         let app = launch()
-        XCTAssertTrue(app.buttons["pattern-unwind"].waitForExistence(timeout: 8))
-        app.buttons["pattern-unwind"].tap()
-        XCTAssertTrue(app.staticTexts["ToneCheck Pro"].waitForExistence(timeout: 5))
-        app.buttons["paywall-close"].tap()
-        XCTAssertTrue(app.buttons["breathe"].waitForExistence(timeout: 5))
-    }
-
-    /// Stats opens and shows the metrics; free users see the locked-history upsell.
-    func testStatsOpens() {
-        let app = launch()
-        XCTAssertTrue(app.buttons["open-stats"].waitForExistence(timeout: 8))
-        app.buttons["open-stats"].tap()
-        XCTAssertTrue(app.staticTexts["Your calm"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Done"].exists)   // sheet is up with its Done control
-        app.buttons["Done"].tap()
-    }
-
-    /// Settings opens; theme + haptics controls work.
-    func testSettingsControls() {
-        let app = launch()
-        XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 8))
-        app.buttons["open-settings"].tap()
-        XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 5))
-        if app.buttons["Dark"].exists { app.buttons["Dark"].tap() }
-        let haptics = app.switches["Haptics"]
-        if haptics.exists { haptics.tap() }
-        app.buttons["Done"].tap()
-        XCTAssertTrue(app.buttons["breathe"].waitForExistence(timeout: 5))
-    }
-
-    /// Pro: build and save a custom pattern.
-    func testProCustomPatternBuilder() {
-        let app = launch(pro: true)
-        XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 8))
-        app.buttons["open-settings"].tap()
-        let newPattern = app.buttons["New pattern"]
-        XCTAssertTrue(newPattern.waitForExistence(timeout: 5))
-        newPattern.tap()
-        XCTAssertTrue(app.buttons["save-pattern"].waitForExistence(timeout: 5))
-        app.buttons["save-pattern"].tap()
-        // Back in settings, the saved pattern row should exist.
-        XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Check"].waitForExistence(timeout: 5))
+        // Check tab should be visible
+        XCTAssertTrue(app.buttons["Check Tone"].waitForExistence(timeout: 5))
     }
 }

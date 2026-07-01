@@ -1,84 +1,80 @@
 import Foundation
+import SwiftData
 
-// MARK: - Tone Result
+// MARK: - Tone category
 
-enum ToneVerdict: String, Codable {
-    case passiveAggressive = "Passive-Aggressive"
-    case neutral           = "Neutral"
-    case cold              = "Cold"
-    case clingy            = "Clingy"
-    case direct            = "Direct"
+enum ToneCategory: String, CaseIterable, Codable {
+    case confident, aggressive, passive, friendly, formal, casual, neutral
 
-    var color: String {
+    var label: String { rawValue.capitalized }
+
+    var symbol: String {
         switch self {
-        case .passiveAggressive: return "danger"
-        case .cold:              return "caution"
-        case .clingy:            return "caution"
-        case .neutral:           return "ok"
-        case .direct:            return "ok"
-        }
-    }
-
-    var sfSymbol: String {
-        switch self {
-        case .passiveAggressive: return "exclamationmark.triangle.fill"
-        case .cold:              return "snowflake"
-        case .clingy:            return "person.fill.checkmark"
-        case .neutral:           return "checkmark.circle.fill"
-        case .direct:            return "arrow.right.circle.fill"
+        case .confident: return "bolt.fill"
+        case .aggressive: return "exclamationmark.triangle.fill"
+        case .passive: return "arrow.down.circle.fill"
+        case .friendly: return "hand.wave.fill"
+        case .formal: return "briefcase.fill"
+        case .casual: return "bubble.left.fill"
+        case .neutral: return "minus.circle.fill"
         }
     }
 }
 
-struct ToneResult: Identifiable {
-    let id = UUID()
-    let verdict: ToneVerdict
-    let score: Int          // 0-100 aggression score
-    let triggers: [String]  // 1-2 phrases that triggered the verdict
-    let rewrite: String?    // softened version (nil until requested)
-    let originalText: String
+// MARK: - ToneResult (used in-memory and for SwiftData history)
+
+struct ToneResult: Codable, Equatable {
+    var primaryTone: String
+    var subTones: [String]
+    var verdict: String
+    var rewriteSuggestion: String
+    var grade: String   // "A" – "F"
 }
 
-// MARK: - Analysis State
+// MARK: - SwiftData history entry
 
-enum AnalysisState: Equatable {
-    case idle
-    case analyzing
-    case result(ToneResult)
-    case error(String)
+@Model
+final class HistoryEntry {
+    var id: UUID = UUID()
+    var createdAt: Date = Date.now
+    var inputText: String = ""
+    var primaryTone: String = ""
+    var subTonesJSON: String = "[]"
+    var verdict: String = ""
+    var rewriteSuggestion: String = ""
+    var grade: String = "C"
 
-    static func == (lhs: AnalysisState, rhs: AnalysisState) -> Bool {
-        switch (lhs, rhs) {
-        case (.idle, .idle), (.analyzing, .analyzing): return true
-        case (.error(let a), .error(let b)): return a == b
-        default: return false
+    init(input: String, result: ToneResult) {
+        self.id = UUID()
+        self.createdAt = .now
+        self.inputText = input
+        self.primaryTone = result.primaryTone
+        self.subTonesJSON = (try? String(data: JSONEncoder().encode(result.subTones), encoding: .utf8)) ?? "[]"
+        self.verdict = result.verdict
+        self.rewriteSuggestion = result.rewriteSuggestion
+        self.grade = result.grade
+    }
+
+    var subTones: [String] {
+        (try? JSONDecoder().decode([String].self, from: Data(subTonesJSON.utf8))) ?? []
+    }
+
+    var toneResult: ToneResult {
+        ToneResult(primaryTone: primaryTone, subTones: subTones,
+                   verdict: verdict, rewriteSuggestion: rewriteSuggestion, grade: grade)
+    }
+}
+
+// MARK: - Grade color helper
+
+enum GradeHelper {
+    static func color(for grade: String) -> String {
+        switch grade.uppercased() {
+        case "A": return "gradeA"
+        case "B": return "gradeB"
+        case "C": return "gradeC"
+        case "D": return "gradeD"
+        default:  return "gradeF"
         }
     }
-}
-
-// MARK: - OpenRouter Response DTOs
-
-struct OpenRouterRequest: Encodable {
-    let model: String
-    let messages: [ChatMessage]
-    let temperature: Double
-    let max_tokens: Int
-}
-
-struct ChatMessage: Codable {
-    let role: String
-    let content: String
-}
-
-struct OpenRouterResponse: Decodable {
-    let choices: [Choice]
-    struct Choice: Decodable {
-        let message: ChatMessage
-    }
-}
-
-struct ToneAnalysisDTO: Decodable {
-    let verdict: String
-    let score: Int
-    let triggers: [String]
 }

@@ -1,178 +1,131 @@
 import Foundation
 import SwiftUI
-
-// MARK: - Usage tracking (free tier: 5 analyses/day)
+import SwiftData
 
 @MainActor
 final class AppModel: ObservableObject {
-    weak var store: Store?
+    // MARK: - Published state
 
-    @Published var analysisState: AnalysisState = .idle
-    @Published var rewriteResult: String? = nil
-    @Published var isRewriting = false
+    @Published var inputText: String = ""
+    @Published private(set) var result: ToneResult?
+    @Published private(set) var isLoading: Bool = false
+    @Published private(set) var error: String?
 
-    private let kUsageDate  = "tonecheck.usage.date"
-    private let kUsageCount = "tonecheck.usage.count"
+    // MARK: - Free tier
 
-    static let freeLimit = 5
-    private let apiKey   = "sk-or-placeholder"
-    private let model    = "openai/gpt-4o-mini"
+    /// Free users get 5 checks per calendar day.
+    static let freeDailyLimit = 5
 
-    // MARK: Daily usage
-
-    var usageToday: Int {
-        guard let stored = UserDefaults.standard.string(forKey: kUsageDate),
-              stored == todayKey else { return 0 }
-        return UserDefaults.standard.integer(forKey: kUsageCount)
-    }
-
-    var canAnalyze: Bool {
-        store?.isPro == true || usageToday < Self.freeLimit
-    }
-
-    var analysesRemaining: Int {
-        max(0, Self.freeLimit - usageToday)
-    }
+    private let kCheckCountKey = "tonecheck.free.count"
+    private let kCheckDayKey = "tonecheck.free.day"
 
     private var todayKey: String {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
         return f.string(from: Date())
     }
 
-    private func incrementUsage() {
-        let key = todayKey
-        if UserDefaults.standard.string(forKey: kUsageDate) != key {
-            UserDefaults.standard.set(key, forKey: kUsageDate)
-            UserDefaults.standard.set(0, forKey: kUsageCount)
+    private func rollIfNeeded() {
+        let d = UserDefaults.standard
+        if d.string(forKey: kCheckDayKey) != todayKey {
+            d.set(todayKey, forKey: kCheckDayKey)
+            d.set(0, forKey: kCheckCountKey)
         }
-        let n = UserDefaults.standard.integer(forKey: kUsageCount) + 1
-        UserDefaults.standard.set(n, forKey: kUsageCount)
     }
 
-    // MARK: Tone Analysis
+    var dailyCheckCount: Int {
+        rollIfNeeded()
+        return UserDefaults.standard.integer(forKey: kCheckCountKey)
+    }
 
-    func analyze(text: String) async {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        analysisState = .analyzing
-        rewriteResult = nil
+    var remainingFreeChecks: Int {
+        max(0, Self.freeDailyLimit - dailyCheckCount)
+    }
+
+    func canCheck(isPro: Bool) -> Bool {
+        if isPro { return true }
+        rollIfNeeded()
+        return dailyCheckCount < Self.freeDailyLimit
+    }
+
+    private func recordCheck() {
+        rollIfNeeded()
+        let d = UserDefaults.standard
+        d.set(d.integer(forKey: kCheckCountKey) + 1, forKey: kCheckCountKey)
+    }
+
+    // MARK: - SwiftData container (local only)
+
+    let container: ModelContainer
+
+    static func makeContainer() -> ModelContainer {
+        let schema = Schema([HistoryEntry.self])
+        let local = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
+        if let c = try? ModelContainer(for: schema, configurations: local) { return c }
+        let mem = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try! ModelContainer(for: schema, configurations: mem)
+    }
+
+    init() {
+        self.container = Self.makeContainer()
+    }
+
+    var context: ModelContext { container.mainContext }
+
+    // MARK: - Analyze
+
+    func analyzeText(isPro: Bool) async {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            error = "Paste some text first."
+            return
+        }
+        guard canCheck(isPro: isPro) else {
+            error = "You've used your 5 free checks today. Upgrade to Pro for unlimited checks."
+            return
+        }
+
+        isLoading = true
+        error = nil
+        result = nil
 
         do {
-            let result = try await callOpenRouter(for: text)
-            incrementUsage()
-            analysisState = .result(result)
-            Haptics.success()
+            let r = try await AIClient.shared.analyzeTone(text: text)
+            result = r
+            recordCheck()
+        } catch AIError.rateLimited {
+            error = "Daily limit reached — resets tomorrow."
+        } catch AIError.badResponse {
+            error = "Couldn't reach the service. Check your connection and try again."
+        } catch AIError.http(let code) {
+            if AIConfig.apiKey.isEmpty {
+                error = "No API key configured. Add your OpenRouter key to AIConfig.swift."
+            } else {
+                error = "Service error (\(code)). Please try again."
+            }
         } catch {
-            analysisState = .error(error.localizedDescription)
+            self.error = "Something went wrong. Please try again."
         }
+
+        isLoading = false
     }
 
-    func rewrite(text: String) async {
-        isRewriting = true
-        do {
-            let rewritten = try await callRewrite(for: text)
-            rewriteResult = rewritten
-        } catch {
-            rewriteResult = nil
-        }
-        isRewriting = false
+    // MARK: - Save to history (Pro)
+
+    func saveToHistory(result: ToneResult, input: String) {
+        let entry = HistoryEntry(input: input, result: result)
+        context.insert(entry)
+        try? context.save()
     }
 
-    func reset() {
-        analysisState = .idle
-        rewriteResult = nil
+    func deleteEntry(_ entry: HistoryEntry) {
+        context.delete(entry)
+        try? context.save()
     }
 
-    // MARK: Private: API calls
-
-    private func callOpenRouter(for text: String) async throws -> ToneResult {
-        let systemPrompt = """
-        You are a message tone analyzer. Analyze the tone of a text message and return JSON only.
-        Return exactly this JSON structure with no other text:
-        {
-          "verdict": "<one of: Passive-Aggressive, Neutral, Cold, Clingy, Direct>",
-          "score": <integer 0-100 representing aggression/tension level>,
-          "triggers": ["<phrase 1>", "<phrase 2 if applicable>"]
-        }
-        Guidelines:
-        - score 0-30: calm and fine
-        - score 31-60: some tension, use caution
-        - score 61-100: high tension or problematic tone
-        - triggers: 1-2 specific short phrases from the text that most signal the tone
-        - triggers array must have at least 1 element
-        """
-
-        let messages = [
-            ChatMessage(role: "system", content: systemPrompt),
-            ChatMessage(role: "user", content: "Analyze this message:\n\n\(text)")
-        ]
-
-        let responseText = try await post(messages: messages, maxTokens: 200)
-
-        // Parse JSON from response
-        let cleaned = responseText
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: "```json").last?
-            .components(separatedBy: "```").first?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? responseText
-
-        guard let data = cleaned.data(using: .utf8),
-              let dto = try? JSONDecoder().decode(ToneAnalysisDTO.self, from: data) else {
-            throw ToneError.parseFailure
-        }
-
-        let verdict = ToneVerdict(rawValue: dto.verdict) ?? .neutral
-        let score   = max(0, min(100, dto.score))
-        let triggers = Array(dto.triggers.prefix(2))
-
-        return ToneResult(verdict: verdict, score: score, triggers: triggers,
-                          rewrite: nil, originalText: text)
-    }
-
-    private func callRewrite(for text: String) async throws -> String {
-        let messages = [
-            ChatMessage(role: "system", content: "You are a communication coach. Rewrite the following message to be more neutral, warm, and direct. Return only the rewritten message with no preamble or explanation."),
-            ChatMessage(role: "user", content: text)
-        ]
-        return try await post(messages: messages, maxTokens: 300)
-    }
-
-    private func post(messages: [ChatMessage], maxTokens: Int) async throws -> String {
-        let url = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("ToneCheck iOS", forHTTPHeaderField: "X-Title")
-
-        let body = OpenRouterRequest(model: model, messages: messages,
-                                     temperature: 0.3, max_tokens: maxTokens)
-        request.httpBody = try JSONEncoder().encode(body)
-        request.timeoutInterval = 30
-
-        let (data, resp) = try await URLSession.shared.data(for: request)
-        guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw ToneError.apiError(msg)
-        }
-
-        let decoded = try JSONDecoder().decode(OpenRouterResponse.self, from: data)
-        guard let content = decoded.choices.first?.message.content else {
-            throw ToneError.emptyResponse
-        }
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-enum ToneError: LocalizedError {
-    case parseFailure
-    case emptyResponse
-    case apiError(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .parseFailure:    return "Could not parse tone result. Please try again."
-        case .emptyResponse:   return "No response from server. Please try again."
-        case .apiError(let m): return "API error: \(m)"
-        }
+    func clearResult() {
+        result = nil
+        error = nil
     }
 }

@@ -11,30 +11,43 @@
   },
   "identifier" : "TONECHECK_STOREKIT_CONFIG",
   "nonRenewingSubscriptions" : [],
-  "products" : [
-    {
-      "displayPrice" : "0.99",
-      "familyShareable" : true,
-      "internalID" : "tonecheck_pro_unlock_id",
-      "localizations" : [
-        {
-          "description" : "Unlock custom breathing patterns, more presets, your full history & all-time stats, extra Calm Card styles and the streak widget. One-time purchase.",
-          "displayName" : "ToneCheck Pro",
-          "locale" : "en_US"
-        }
-      ],
-      "productID" : "tonecheck_pro_unlock",
-      "referenceName" : "ToneCheck Pro Unlock",
-      "type" : "NonConsumable"
-    }
-  ],
+  "products" : [],
   "settings" : {
     "_failTransactionsEnabled" : false,
     "_storeKitErrors" : []
   },
-  "subscriptionGroups" : [],
+  "subscriptionGroups" : [
+    {
+      "id" : "TONECHECK_PRO_GROUP",
+      "localizations" : [],
+      "name" : "ToneCheck Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "0.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "tonecheck_pro_monthly_id",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited tone checks, full tone breakdown, saved history, and rewrite suggestions.",
+              "displayName" : "ToneCheck Pro",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "tonecheck_pro_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "ToneCheck Pro Monthly",
+          "subscriptionGroupID" : "TONECHECK_PRO_GROUP",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
   "version" : {
-    "major" : 3,
+    "major" : 4,
     "minor" : 0
   }
 }

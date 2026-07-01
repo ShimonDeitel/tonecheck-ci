@@ -2,33 +2,38 @@ import SwiftUI
 import UIKit
 
 // MARK: - Minimalist, Apple-native color system
-// Flat surfaces, system semantic colors (so Light AND Dark both look right),
-// a single Apple-blue accent. No gradients.
+// Flat surfaces, system semantic colors (Light AND Dark both look right),
+// single Apple-blue accent. No gradients.
 
 extension Color {
-    static let tonecheckAccent = Color(hex: "#007AFF")          // the single accent
-    static let tonecheckCard = Color(uiColor: .secondarySystemBackground)
-    static let tonecheckCard2 = Color(uiColor: .tertiarySystemBackground)
-    static let tonecheckField = Color(uiColor: .tertiarySystemFill)
-    static let tonecheckHair = Color(uiColor: .separator)
+    static let tcAccent = Color(hex: "#007AFF")
+    static let tcCard = Color(uiColor: .secondarySystemBackground)
+    static let tcCard2 = Color(uiColor: .tertiarySystemBackground)
+    static let tcField = Color(uiColor: .tertiarySystemFill)
+    static let tcHair = Color(uiColor: .separator)
+
+    // Grade colors
+    static let gradeA = Color(hex: "#34C759")   // green
+    static let gradeB = Color(hex: "#30D158")   // light green
+    static let gradeC = Color(hex: "#FF9F0A")   // amber
+    static let gradeD = Color(hex: "#FF6B35")   // orange
+    static let gradeF = Color(hex: "#FF3B30")   // red
 }
 
-// MARK: - Flat surfaces (cards / pills / buttons)
+// MARK: - Card / pill helpers
 
 extension View {
-    func tonecheckCard(cornerRadius: CGFloat = 20) -> some View {
+    func tcCard(cornerRadius: CGFloat = 16) -> some View {
         self.padding(16)
-            .background(Color.tonecheckCard, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(Color.tcCard, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 
-    func tonecheckPill() -> some View {
-        self.padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Color.tonecheckCard, in: Capsule())
+    func tcPill() -> some View {
+        self.padding(.horizontal, 12).padding(.vertical, 6)
+            .background(Color.tcCard2, in: Capsule())
     }
 
-    /// Primary action — a clean, flat Apple-blue filled capsule.
     func prominentButton() -> some View { self.buttonStyle(FilledAccentButtonStyle()) }
-    /// Secondary action — flat tinted capsule.
     func softButton() -> some View { self.buttonStyle(SoftButtonStyle()) }
 }
 
@@ -37,9 +42,9 @@ struct FilledAccentButtonStyle: ButtonStyle {
         configuration.label
             .font(.headline.weight(.semibold))
             .foregroundStyle(.white)
-            .padding(.vertical, 13)
-            .padding(.horizontal, 22)
-            .background(Color.tonecheckAccent, in: Capsule())
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(Color.tcAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .opacity(configuration.isPressed ? 0.85 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
@@ -49,44 +54,39 @@ struct FilledAccentButtonStyle: ButtonStyle {
 struct SoftButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.headline.weight(.medium))
-            .foregroundStyle(Color.tonecheckAccent)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(Color.tcAccent)
             .padding(.vertical, 12)
-            .padding(.horizontal, 18)
-            .background(Color.tonecheckCard, in: Capsule())
+            .frame(maxWidth: .infinity)
+            .background(Color.tcCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
-// MARK: - Background (flat, adapts to light/dark)
+// MARK: - Background
 
-struct ToneCheckBackground: View {
+struct TCBackground: View {
     var body: some View { Color(uiColor: .systemBackground).ignoresSafeArea() }
 }
 
 // MARK: - Haptics
 
 enum Haptics {
-    static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-    static func soft() { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+    static func tap()     { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
     static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-
-    /// Generic medium haptic for secondary actions.
-    static func medium() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
 }
 
-// MARK: - Theme
+// MARK: - Grade color helper (runtime)
 
-enum AppTheme: String, CaseIterable, Identifiable {
-    case system, light, dark
-    var id: String { rawValue }
-    var label: String { rawValue.capitalized }
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system: return nil
-        case .light: return .light
-        case .dark: return .dark
+extension Color {
+    static func gradeColor(for grade: String) -> Color {
+        switch grade.uppercased() {
+        case "A": return .gradeA
+        case "B": return .gradeB
+        case "C": return .gradeC
+        case "D": return .gradeD
+        default:  return .gradeF
         }
     }
 }

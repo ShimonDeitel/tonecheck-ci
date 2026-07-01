@@ -32,23 +32,6 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: "YES"
         GENERATE_INFOPLIST_FILE: "NO"
-    dependencies:
-      - target: ToneCheckWidgets
-        embed: true
-  ToneCheckWidgets:
-    type: app-extension
-    platform: iOS
-    sources:
-      - path: ToneCheckWidgets
-      - path: Shared
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.shimondeitel.tonecheck.widgets
-        TARGETED_DEVICE_FAMILY: "1"
-        INFOPLIST_FILE: ToneCheckWidgets/Info.plist
-        CODE_SIGN_ENTITLEMENTS: ToneCheckWidgets/ToneCheckWidgets.entitlements
-        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        GENERATE_INFOPLIST_FILE: "NO"
   ToneCheckTests:
     type: bundle.unit-test
     platform: iOS
